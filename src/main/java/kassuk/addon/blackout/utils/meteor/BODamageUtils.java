@@ -12,13 +12,14 @@ import meteordevelopment.meteorclient.mixininterface.IExplosion;
 import meteordevelopment.meteorclient.mixininterface.IRaycastContext;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.meteorclient.utils.PreInit;
+import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.entity.EntityUtils;
 import meteordevelopment.meteorclient.utils.entity.fakeplayer.FakePlayerEntity;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.*;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -26,7 +27,6 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtList;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.*;
@@ -66,7 +66,7 @@ public class BODamageUtils {
     }
 
     public static double crystalDamage(PlayerEntity player, Box bb, Vec3d crystal, BlockPos obsidianPos, boolean ignoreTerrain) {
-        if (player == null) return 0;
+        if (player == null || mc.world == null) return 0;
         if (EntityUtils.getGameMode(player) == GameMode.CREATIVE && !(player instanceof FakePlayerEntity)) return 0;
 
         ((IVec3d) vec3d).set((bb.minX + bb.maxX) / 2, bb.minY, (bb.minZ + bb.maxZ) / 2);
@@ -79,11 +79,11 @@ public class BODamageUtils {
         double damage = ((impact * impact + impact) / 2 * 7 * (6 * 2) + 1);
 
         damage = getDamageForDifficulty(damage);
-        damage = DamageUtil.getDamageLeft((float) damage, (float) player.getArmor(), (float) player.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
+        damage = DamageUtil.getDamageLeft(player, (float) damage, mc.world.getDamageSources().explosion(null), (float) player.getArmor(), (float) player.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
         damage = resistanceReduction(player, damage);
 
         ((IExplosion) explosion).set(crystal, 6, false);
-        damage = blastProtReduction(player, damage, explosion);
+        damage = blastProtReduction(player, damage);
 
         return damage < 0 ? 0 : damage;
     }
@@ -143,24 +143,10 @@ public class BODamageUtils {
     private static int sus(ItemStack stack) {
         int r = 0;
         if (!stack.isEmpty()) {
-
-            NbtList nbttaglist = stack.getEnchantments();
-
-            for (int i = 0; i < nbttaglist.size(); ++i)
-            {
-                int j = nbttaglist.getCompound(i).getShort("id");
-                int k = nbttaglist.getCompound(i).getShort("lvl") + 1;
-                Enchantment e = Enchantment.byRawId(j);
-
-
-                if (e != null)
-                {
-                    if (e == Enchantments.BLAST_PROTECTION) {
-                        r += k * 2;
-                    } else if (e == Enchantments.PROTECTION) {
-                        r += k;
-                    }
-                }
+            if (Utils.hasEnchantment(stack,Enchantments.BLAST_PROTECTION)) {
+                r += Utils.getEnchantmentLevel(stack,Enchantments.BLAST_PROTECTION) * 2;
+            } else if (Utils.hasEnchantment(stack,Enchantments.PROTECTION)) {
+                r += Utils.getEnchantmentLevel(stack,Enchantments.PROTECTION);
             }
         }
         return r;
@@ -193,8 +179,8 @@ public class BODamageUtils {
         }
 
         if (stack.getEnchantments() != null) {
-            if (EnchantmentHelper.get(stack).containsKey(Enchantments.SHARPNESS)) {
-                int level = EnchantmentHelper.getLevel(Enchantments.SHARPNESS, stack);
+            if (Utils.hasEnchantment(stack, Enchantments.SHARPNESS)) {
+                int level = Utils.getEnchantmentLevel(stack, Enchantments.SHARPNESS);
                 damage += (0.5 * level) + 0.5;
             }
         }
@@ -208,7 +194,7 @@ public class BODamageUtils {
         damage = resistanceReduction(target, damage);
 
         // Reduce by armour
-        damage = DamageUtil.getDamageLeft((float) damage, (float) target.getArmor(), (float) target.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
+        damage = DamageUtil.getDamageLeft(target, (float) damage, mc.world.getDamageSources().explosion(null), (float) target.getArmor(), (float) target.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
 
         // Reduce by enchants
         damage = normalProtReduction(target, damage);
@@ -236,11 +222,11 @@ public class BODamageUtils {
         damage = resistanceReduction(player, damage);
 
         // Reduce by armour
-        damage = DamageUtil.getDamageLeft((float) damage, (float) player.getArmor(), (float) player.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
+        damage = DamageUtil.getDamageLeft(player, (float) damage, mc.world.getDamageSources().explosion(null), (float) player.getArmor(), (float) player.getAttributeInstance(EntityAttributes.GENERIC_ARMOR_TOUGHNESS).getValue());
 
         // Reduce by enchants
         ((IExplosion) explosion).set(bed, 5, true);
-        damage = blastProtReduction(player, damage, explosion);
+        damage = blastProtReduction(player, damage);
 
         if (damage < 0) damage = 0;
         return damage;
@@ -263,15 +249,23 @@ public class BODamageUtils {
     }
 
     private static double normalProtReduction(Entity player, double damage) {
-        int protLevel = EnchantmentHelper.getProtectionAmount(player.getArmorItems(), mc.world.getDamageSources().generic());
+        if (!(player instanceof LivingEntity)) return 0;
+        int protLevel = 0;
+        for (var armor : ((LivingEntity) player).getAllArmorItems()) {
+            protLevel += Utils.getEnchantmentLevel(armor, Enchantments.PROTECTION);
+        }
         if (protLevel > 20) protLevel = 20;
 
         damage *= 1 - (protLevel / 25.0);
         return damage < 0 ? 0 : damage;
     }
 
-    private static double blastProtReduction(Entity player, double damage, Explosion explosion) {
-        int protLevel = EnchantmentHelper.getProtectionAmount(player.getArmorItems(), mc.world.getDamageSources().explosion(explosion));
+    private static double blastProtReduction(Entity player, double damage) {
+        if (!(player instanceof LivingEntity)) return 0;
+        int protLevel = 0;
+        for (var armor : ((LivingEntity) player).getAllArmorItems()) {
+            protLevel += Utils.getEnchantmentLevel(armor, Enchantments.BLAST_PROTECTION);
+        }
         if (protLevel > 20) protLevel = 20;
 
         damage *= (1 - (protLevel / 25.0));
