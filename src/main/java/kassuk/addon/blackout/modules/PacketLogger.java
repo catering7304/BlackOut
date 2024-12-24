@@ -104,17 +104,17 @@ public class PacketLogger extends BlackOutModule {
         if (packet instanceof KeepAliveC2SPacket p) return "KeepAlive id:" + p.getId();
         if (packet instanceof ResourcePackStatusC2SPacket p) return "ResourcePackStatus status:" + p.status().name() + " id:" + p.id().toString();
 
-        if (packet instanceof ReadyC2SPacket p) return "Ready state:" + (p.getPacketId() == null ? "null" : p.getPacketId());
+        if (packet instanceof ReadyC2SPacket p) return "Ready state:" + p.transitionsNetworkState();
 
         if (packet instanceof HandshakeC2SPacket p) return "Handshake state:" + p.intendedState().name() + " address:" + p.address() + " protocol:" + p.protocolVersion();
 
-        if (packet instanceof EnterConfigurationC2SPacket p) return "EnterConfiguration state:" + (p.getPacketId() == null ? "null" : p.getPacketId());
+        if (packet instanceof EnterConfigurationC2SPacket p) return "EnterConfiguration state:" + p.transitionsNetworkState();
         if (packet instanceof LoginHelloC2SPacket p) return "LoginHello id:" + p.profileId() + " name:" + p.name();
         if (packet instanceof LoginKeyC2SPacket) return "LoginKey";
         if (packet instanceof LoginQueryResponseC2SPacket p) return "LoginQueryResponse id:" + p.queryId();
 
-        if (packet instanceof AcknowledgeChunksC2SPacket p) return "AcknowledgeChunks state:" + p.getPacketId() + " desired chunks per tick:" + p.desiredChunksPerTick();
-        if (packet instanceof AcknowledgeReconfigurationC2SPacket p) return "AcknowledgeReconfiguration state:" + p.getPacketId();
+        if (packet instanceof AcknowledgeChunksC2SPacket p) return "AcknowledgeChunks state:" + p.transitionsNetworkState() + " desired chunks per tick:" + p.desiredChunksPerTick();
+        if (packet instanceof AcknowledgeReconfigurationC2SPacket p) return "AcknowledgeReconfiguration state:" + p.transitionsNetworkState();
         if (packet instanceof AdvancementTabC2SPacket p) return "AdvancementTab action:" + p.getAction() + " toOpen:" + p.getTabToOpen();
         if (packet instanceof BoatPaddleStateC2SPacket p) return "BoatPaddle isLeftPadling:" + p.isLeftPaddling() + " isRightPaddling:" + p.isRightPaddling();
         if (packet instanceof BookUpdateC2SPacket p) return "BookUpdate slot:" + p.slot() + " pages:" + p.pages().size() + " title:" + p.title();
